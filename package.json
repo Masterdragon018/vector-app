@@ -1,0 +1,81 @@
+{
+  "name": "cerebro-local",
+  "version": "0.2.2",
+  "description": "Vectoriza tus carpetas y conéctalas a tus agentes mediante MCP o API — 100% local",
+  "main": "dist/main/index.js",
+  "license": "MIT",
+  "author": "Cerebro Local",
+  "homepage": "https://github.com/cerebro-local/cerebro-local",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "smoke": "tsx scripts/smoke.ts",
+    "rebuild:electron": "electron-rebuild -f -w better-sqlite3",
+    "rebuild:node": "npm rebuild better-sqlite3",
+    "start": "npm run build && node dist/main/web.js",
+    "app": "npm run build && npm run rebuild:electron && electron .",
+    "dist": "npm run build && electron-builder"
+  },
+  "build": {
+    "appId": "local.cerebro.app",
+    "productName": "Cerebro Local",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "**/node_modules/better-sqlite3/**",
+      "**/node_modules/sqlite-vec/**",
+      "**/node_modules/sqlite-vec-*/**",
+      "**/node_modules/onnxruntime-node/**",
+      "**/node_modules/@img/**"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility",
+      "maintainer": "Cerebro Local <cerebro@localhost>",
+      "synopsis": "Vectoriza tus carpetas y conectalas a tus agentes mediante MCP o API",
+      "executableName": "cerebro-local"
+    }
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.3.1",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "better-sqlite3": "^13.0.3",
+    "chokidar": "^5.0.0",
+    "electron-updater": "^6.8.9",
+    "express": "^5.3.0",
+    "ignore": "^7.0.12",
+    "onnxruntime-node": "^1.30.0",
+    "picomatch": "^4.0.7",
+    "sqlite-vec": "^0.1.9",
+    "unpdf": "^1.8.1"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.2.1",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.5",
+    "@types/picomatch": "^4.0.3",
+    "electron": "^44.7.2",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

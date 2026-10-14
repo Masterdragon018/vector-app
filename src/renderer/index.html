@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:;">
+<title>Cerebro Local</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ═══════ SIDEBAR ═══════ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <div class="brand-text">
+        <b>Cerebro Local</b>
+        <span>Vector Store</span>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-label">Explorar</div>
+      <button class="nav-item active" data-view="home">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="2.6"/><circle cx="5" cy="5.5" r="2"/><circle cx="19" cy="5.5" r="2"/>
+          <circle cx="5" cy="18.5" r="2"/><circle cx="19" cy="18.5" r="2"/>
+          <path d="M6.7 7 9.9 10M17.3 7 14.1 10M6.7 17 9.9 14M17.3 17 14.1 14"/>
+        </svg>
+        <span>Red neuronal</span>
+      </button>
+      <button class="nav-item" data-view="resumen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/>
+          <rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>
+        </svg>
+        <span>Resumen</span>
+        <span class="badge live" id="navLive" hidden>live</span>
+      </button>
+      <button class="nav-item" data-view="carpetas">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 7a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.4.6L12 7h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        </svg>
+        <span>Carpetas</span>
+        <span class="badge" id="navFolders">0</span>
+      </button>
+      <button class="nav-item" data-view="tipos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <path d="M14 2v6h6M9 13h6M9 17h4"/>
+        </svg>
+        <span>Tipos de archivo</span>
+      </button>
+      <button class="nav-item" data-view="modelos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a5 5 0 0 1 5 5c0 1.7-.9 3.2-2.2 4.1A4 4 0 0 1 17 15v3a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3v-3a4 4 0 0 1 2.2-3.9A5 5 0 0 1 12 2z"/>
+          <path d="M12 8v8M9 12h6"/>
+        </svg>
+        <span>Modelos</span>
+      </button>
+      <div class="nav-label">Interacción</div>
+      <button class="nav-item" data-view="playground">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.8-.8L3 21l1.9-5.1A8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5z"/>
+        </svg>
+        <span>Playground</span>
+      </button>
+      <button class="nav-item" data-view="conexion">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 17H7A5 5 0 0 1 7 7h2M15 7h2a5 5 0 0 1 0 10h-2M8 12h8"/>
+        </svg>
+        <span>Conexión</span>
+      </button>
+      <button class="nav-item" data-view="registro">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/>
+        </svg>
+        <span>Registro</span>
+      </button>
+      <div class="nav-label">Sistema</div>
+      <button class="nav-item" data-view="ajustes">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
+        </svg>
+        <span>Ajustes</span>
+      </button>
+    </nav>
+
+    <div class="storage" id="storageBox">
+      <div class="row"><b>Almacenamiento</b><span id="stBytes">—</span></div>
+      <div class="storage-bar"><i style="width:12%;background:linear-gradient(90deg,#8b5cf6,#a78bfa)"></i></div>
+      <div class="storage-legend">
+        <span><i style="background:#a78bfa"></i>Índice</span>
+        <span><i style="background:#67e8f9"></i>Modelos</span>
+      </div>
+    </div>
+
+    <div class="side-foot">
+      <span class="dot" id="sideDot"></span>
+      <span id="sideStatus">Iniciando…</span>
+    </div>
+  </aside>
+
+  <!-- ═══════ MAIN ═══════ -->
+  <div class="main">
+
+    <header class="topbar">
+      <div class="crumbs">
+        <b id="topTitle">Red neuronal</b>
+        <span class="sep">·</span>
+        <span class="sub" id="topSub">conectando…</span>
+      </div>
+
+      <div class="searchbox">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+        </svg>
+        <input type="text" placeholder="Buscar en el cerebro…" id="globalSearch">
+        <kbd>⌘K</kbd>
+      </div>
+
+      <div class="topbar-right">
+        <button class="icon-btn" id="btnRescan" title="Re-escanear carpetas">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/>
+          </svg>
+        </button>
+        <div class="avatar">CL</div>
+      </div>
+    </header>
+
+    <!-- ═══ VISTA: RED ═══ -->
+    <section class="view active" id="view-home">
+      <canvas id="net"></canvas>
+      <div class="home-ui">
+        <div class="home-head">
+          <h2>Red de conocimiento</h2>
+          <p>Cada nodo es una carpeta vectorizada. El tamaño representa el volumen de archivos y el estado, su disponibilidad para los agentes.</p>
+        </div>
+
+        <div class="home-filters">
+          <button class="chip active" data-filter="all"><i style="background:#a78bfa"></i>Todas</button>
+          <button class="chip" data-filter="ok"><i style="background:#34d399"></i>Vectorizadas</button>
+          <button class="chip" data-filter="index"><i style="background:#fbbf24"></i>Indexando</button>
+          <button class="chip" data-filter="pending"><i style="background:#626b7e"></i>Pendientes</button>
+        </div>
+
+        <div class="home-stats">
+          <div class="stat-card accent"><b id="hsFiles">0</b><span>Archivos</span></div>
+          <div class="stat-card cyan"><b id="hsChunks">0</b><span>Fragmentos</span></div>
+          <div class="stat-card green"><b id="hsBytes">0 B</b><span>Origen</span></div>
+        </div>
+
+        <div class="net-controls">
+          <button id="zoomIn" title="Acercar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+          <button id="zoomOut" title="Alejar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg>
+          </button>
+          <button id="resetNet" title="Recentrar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"/></svg>
+          </button>
+        </div>
+
+        <div class="home-legend">
+          <div class="legend-row"><span class="legend-dot" style="background:#34d399;box-shadow:0 0 9px #34d399"></span>Vectorizada</div>
+          <div class="legend-row"><span class="legend-dot" style="background:#fbbf24;box-shadow:0 0 9px #fbbf24"></span>Indexando…</div>
+          <div class="legend-row"><span class="legend-dot" style="background:#626b7e"></span>Pendiente</div>
+        </div>
+
+        <div class="home-actions">
+          <button class="btn ghost" data-goto="carpetas">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 7a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.4.6L12 7h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            </svg>
+            Gestionar carpetas
+          </button>
+          <button class="btn primary" data-goto="conexion">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 17H7A5 5 0 0 1 7 7h2M15 7h2a5 5 0 0 1 0 10h-2M8 12h8"/>
+            </svg>
+            Conectar agentes
+          </button>
+        </div>
+      </div>
+      <div id="nodeTip"></div>
+    </section>
+
+    <!-- ═══ VISTA: RESUMEN ═══ -->
+    <section class="view" id="view-resumen">
+      <div class="page">
+        <div class="page-head">
+          <div class="txt">
+            <h2>Resumen del sistema</h2>
+            <p>Estado en tiempo real del cerebro, cola de indexación y actividad reciente.</p>
+          </div>
+          <div class="actions">
+            <button class="btn ghost sm" id="btnPauseAll">Pausar todo</button>
+            <button class="btn primary sm" id="btnReindex">Re-indexar</button>
+          </div>
+        </div>
+
+        <div class="grid c4" style="margin-bottom:20px">
+          <div class="kpi">
+            <div class="top"><div class="ico p"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.4.6L12 7h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div><span class="lbl">Carpetas</span></div>
+            <div class="val" id="kFolders">0</div>
+            <div class="delta flat" id="kFoldersDelta">activas</div>
+          </div>
+          <div class="kpi">
+            <div class="top"><div class="ico c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div><span class="lbl">Archivos</span></div>
+            <div class="val" id="kFiles">0</div>
+            <div class="delta flat" id="kFilesDelta">indexados</div>
+          </div>
+          <div class="kpi">
+            <div class="top"><div class="ico g"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><span class="lbl">Fragmentos</span></div>
+            <div class="val"><span id="kChunks">0</span><small>chunks</small></div>
+            <div class="delta flat" id="kChunksDelta">vectorizados</div>
+          </div>
+          <div class="kpi">
+            <div class="top"><div class="ico a"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h8l-1 8 10-12h-8z"/></svg></div><span class="lbl">Latencia media</span></div>
+            <div class="val"><span id="kLatency">—</span><small>ms</small></div>
+            <div class="delta flat">búsqueda híbrida</div>
+          </div>
+        </div>
+
+        <div class="grid c2">
+          <div class="card">
+            <div class="card-h">
+              <h3>Cola de indexación</h3>
+              <div class="right"><span class="tag amber" id="queueTag">inactivo</span></div>
+            </div>
+            <div class="card-b" style="padding-top:6px;padding-bottom:6px" id="queueBox">
+              <p style="font-size:12px;color:var(--muted2);padding:12px 0">Sin actividad. Añade carpetas o pulsa «Re-indexar».</p>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">
+              <h3>Distribución por tipo</h3>
+              <div class="right"><span class="sub">fragmentos</span></div>
+            </div>
+            <div class="card-b" id="distBox">
+              <p style="font-size:12px;color:var(--muted2)">Sin datos todavía.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ VISTA: CARPETAS ═══ -->
+    <section class="view" id="view-carpetas">
+      <div class="page">
+        <div class="page-head">
+          <div class="txt">
+            <h2>Carpetas del cerebro</h2>
+            <p>Selecciona qué carpetas de tu equipo quieres que los agentes puedan consultar. Solo se leen los archivos; nada se modifica ni sale de tu equipo.</p>
+          </div>
+          <div class="actions">
+            <button class="btn primary sm" id="btnAddFolder">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+              Añadir carpeta
+            </button>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Raíces monitorizadas <span class="count" id="folderCount">· 0 carpetas</span></div>
+          <div class="card">
+            <div class="tree" id="folderTree">
+              <p style="font-size:12px;color:var(--muted2);padding:16px">Aún no hay carpetas. Pulsa «Añadir carpeta» para empezar a construir el cerebro.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Comportamiento</div>
+          <div class="card">
+            <div class="setting-row">
+              <div class="lbl"><b>Indexación automática</b><span>Detectar cambios y vectorizar en segundo plano</span></div>
+              <label class="switch"><input type="checkbox" id="swAuto" checked><span class="track"></span></label>
+            </div>
+            <div class="setting-row">
+              <div class="lbl"><b>Respetar .gitignore</b><span>Ignorar los archivos excluidos por el repositorio</span></div>
+              <label class="switch"><input type="checkbox" id="swGitignore" checked><span class="track"></span></label>
+            </div>
+            <div class="setting-row">
+              <div class="lbl"><b>Ignorar carpetas ocultas</b><span>Todo lo que empiece por punto, además de node_modules y .git</span></div>
+              <label class="switch"><input type="checkbox" id="swHidden" checked><span class="track"></span></label>
+            </div>
+            <div class="setting-row">
+              <div class="lbl"><b>Seguir enlaces simbólicos</b><span>Puede provocar bucles; desactivado por seguridad</span></div>
+              <label class="switch"><input type="checkbox" id="swSymlinks"><span class="track"></span></label>
+            </div>
+            <div class="setting-row">
+              <div class="lbl"><b>Intervalo de re-escaneo</b><span>Cada cuánto se comprueban cambios en disco</span></div>
+              <div class="ctrl">
+                <select class="select sm" id="selRescan" style="width:160px">
+                  <option value="30">30 segundos</option>
+                  <option value="120">2 minutos</option>
+                  <option value="600">10 minutos</option>
+                  <option value="3600">1 hora</option>
+                  <option value="0">Manual</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ VISTA: TIPOS ═══ -->
+    <section class="view" id="view-tipos">
+      <div class="page">
+        <div class="page-head">
+          <div class="txt">
+            <h2>Tipos de archivo a procesar</h2>
+            <p>Define qué formatos entran en el cerebro. Todo lo que no esté marcado se omite por completo: ni se lee ni se indexa.</p>
+          </div>
+          <div class="actions">
+            <button class="btn ghost sm" id="btnExtNone">Ninguno</button>
+            <button class="btn ghost sm" id="btnExtAll">Todos</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Ajustes rápidos</div>
+          <div class="preset-grid" id="presetGrid"></div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Extensiones <span class="count" id="extCount">· 0 seleccionadas</span></div>
+          <div class="ext-grid" id="extGrid"></div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Límites y exclusiones</div>
+          <div class="card">
+            <div class="setting-row">
+              <div class="lbl"><b>Tamaño máximo por archivo</b><span>Los archivos más grandes se omiten (MB)</span></div>
+              <div class="ctrl"><input class="input sm" type="number" id="inMaxSize" min="1" max="500" style="width:110px"></div>
+            </div>
+            <div class="setting-row">
+              <div class="lbl"><b>Patrones excluidos</b><span>Separados por comas · sintaxis glob</span></div>
+              <div class="ctrl"><input class="input sm" type="text" id="inExcludes" style="width:320px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ VISTA: MODELOS ═══ -->
+    <section class="view" id="view-modelos">
+      <div class="page">
+        <div class="page-head">
+          <div class="txt">
+            <h2>Modelos y vectorización</h2>
+            <p>Elige el modelo de embeddings (100% local, ONNX) y ajusta cómo se fragmenta el contenido.</p>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Recomendación para tu equipo</div>
+          <div class="hint" id="recBox" style="margin-top:0">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h8l-1 8 10-12h-8z"/></svg>
+            <span>Analizando tu equipo…</span>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Modelo de embeddings</div>
+          <div class="grid c2" id="modelList"></div>
+        </div>
+
+        <div class="grid c2">
+          <div class="section">
+            <div class="section-title">Fragmentación</div>
+            <div class="card" style="padding:4px 16px">
+              <div class="slider-row">
+                <div class="top"><b>Tamaño de fragmento</b><span class="val" id="vChunk">512 tokens</span></div>
+                <input type="range" class="range" min="128" max="2048" step="64" value="512" id="rChunk">
+                <div class="hint">Fragmentos más pequeños = mayor precisión, más almacenamiento.</div>
+              </div>
+              <div class="slider-row">
+                <div class="top"><b>Solapamiento</b><span class="val" id="vOverlap">64 tokens</span></div>
+                <input type="range" class="range" min="0" max="512" step="16" value="64" id="rOverlap">
+                <div class="hint">Texto repetido entre fragmentos contiguos para no perder contexto.</div>
+              </div>
+              <div class="slider-row">
+                <div class="top"><b>Mínimo por fragmento</b><span class="val" id="vMin">48 tokens</span></div>
+                <input type="range" class="range" min="8" max="256" step="8" value="48" id="rMin">
+                <div class="hint">Fragmentos más cortos se descartan o se fusionan.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Recuperación</div>
+            <div class="card" style="padding:4px 16px">
+              <div class="slider-row">
+                <div class="top"><b>Resultados por consulta</b><span class="val" id="vTopK">8</span></div>
+                <input type="range" class="range" min="1" max="30" step="1" value="8" id="rTopK">
+                <div class="hint">Cuántos fragmentos se devuelven al agente por defecto.</div>
+              </div>
+              <div class="slider-row">
+                <div class="top"><b>Umbral de similitud</b><span class="val" id="vThr">0.35</span></div>
+                <input type="range" class="range" min="0" max="1" step="0.01" value="0.35" id="rThr">
+                <div class="hint">Por debajo de este score, el resultado se descarta.</div>
+              </div>
+              <div class="slider-row">
+                <div class="top"><b>Peso semántico (vectorial)</b><span class="val" id="vHyb">60%</span></div>
+                <input type="range" class="range" min="0" max="100" step="5" value="60" id="rHyb">
+                <div class="hint">Mezcla entre búsqueda por significado y por palabras clave (BM25).</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ VISTA: PLAYGROUND ═══ -->
+    <section class="view" id="view-playground">
+      <div class="chat-wrap">
+        <div class="chat-scroll" id="chatScroll">
+          <div class="chat-msg bot">
+            <div class="av">C</div>
+            <div class="bubble">
+              <p>Hola 👋 Soy el buscador de tu cerebro local. Devuelvo los fragmentos exactos de tus archivos con su ruta y puntuación: así podrás verificar la calidad del índice antes de conectar tus agentes.</p>
+              <p>Prueba a preguntar algo como <code>¿cómo está estructurada la API?</code> o <code>decisiones sobre la base de datos</code>.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="chat-input-wrap">
+          <div class="chat-input">
+            <textarea rows="1" placeholder="Busca en tu cerebro…" id="chatBox"></textarea>
+            <button class="send-btn" id="btnSend">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ VISTA: CONEXIÓN ═══ -->
+    <section class="view" id="view-conexion">
+      <div class="page">
+        <div class="page-head">
+          <div class="txt">
+            <h2>Conectar agentes</h2>
+            <p>Expón el cerebro a tus asistentes mediante MCP (recomendado) o la API HTTP. Todo se sirve en <code style="font-family:var(--mono);font-size:12px;color:var(--accent3)" id="connHost">127.0.0.1</code>, sin salir de tu equipo.</p>
+          </div>
+          <div class="actions">
+            <span class="tag green" id="serverTag"><span class="dot" style="width:6px;height:6px"></span>Servidor</span>
+          </div>
+        </div>
+
+        <!-- MCP -->
+        <div class="conn-card open" id="cardMcp">
+          <button class="conn-head" data-toggle="cardMcp">
+            <div class="conn-ico mcp">MCP</div>
+            <div class="ttl">
+              <b>Model Context Protocol</b>
+              <span id="mcpUrl">—</span>
+            </div>
+            <span class="status ok">Escuchando</span>
+            <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+          </button>
+          <div class="conn-body">
+            <div class="field" style="margin-top:12px">
+              <label>Configuración (claude_desktop_config.json / mcp.json)</label>
+              <div class="code" id="mcpCode">Generando…<button class="copy-mini" data-copy="mcpCode">Copiar</button></div>
+            </div>
+
+            <div class="hint">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+              <span>Con MCP el agente descubre las herramientas solo (<b>buscar</b>, <b>listar_carpetas</b>, <b>leer_documento</b>, <b>estado_index</b>). Reinicia el cliente y verás <b>cerebro-local</b> en la lista de servidores.</span>
+            </div>
+
+            <button class="agent-btn" data-copy-agent="mcp">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+              Copiar prompt de configuración para el agente
+            </button>
+          </div>
+        </div>
+
+        <!-- API -->
+        <div class="conn-card" id="cardApi">
+          <button class="conn-head" data-toggle="cardApi">
+            <div class="conn-ico api">API</div>
+            <div class="ttl">
+              <b>API HTTP REST</b>
+              <span id="apiUrl">—</span>
+            </div>
+            <span class="status ok">Escuchando</span>
+            <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+          </button>
+          <div class="conn-body">
+            <div class="field" style="margin-top:12px">
+              <label>Ejemplo de uso</label>
+              <div class="code" id="apiCode">Generando…<button class="copy-mini" data-copy="apiCode">Copiar</button></div>
+            </div>
+
+            <div class="hint">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+              <span>Útil si tu agente no soporta MCP. Compatible con function calling: pásale el endpoint a tu LLM.</span>
+            </div>
+
+            <button class="agent-btn" data-copy-agent="api">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+              Copiar prompt de configuración para el agente
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ VISTA: REGISTRO ═══ -->
+    <section class="view" id="view-registro">
+      <div class="page" style="max-width:none">
+        <div class="page-head">
+          <div class="txt">
+            <h2>Registro del servidor</h2>
+            <p>Eventos en tiempo real del motor de vectorización y de las conexiones entrantes.</p>
+          </div>
+          <div class="actions">
+            <button class="btn ghost sm" id="btnClearLogs">Limpiar</button>
+          </div>
+        </div>
+        <div class="logs" id="logBox"></div>
+      </div>
+    </section>
+
+    <!-- ═══ VISTA: AJUSTES ═══ -->
+    <section class="view" id="view-ajustes">
+      <div class="page">
+        <div class="page-head">
+          <div class="txt">
+            <h2>Ajustes generales</h2>
+            <p>Configuración del servidor local, privacidad y comportamiento de la interfaz.</p>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Servidor</div>
+          <div class="card">
+            <div class="setting-row">
+              <div class="lbl"><b>Puerto</b><span>Puerto donde escucha el servidor local</span></div>
+              <div class="ctrl"><input class="input sm" type="number" id="inPort" min="1024" max="65535" style="width:120px"></div>
+            </div>
+            <div class="setting-row">
+              <div class="lbl"><b>Token de acceso</b><span>Se usa en las cabeceras Authorization: Bearer</span></div>
+              <div class="ctrl">
+                <input class="input sm" type="text" id="inToken" readonly style="width:260px;font-family:var(--mono);font-size:11px">
+                <button class="btn sm ghost" id="btnRegenToken">Regenerar</button>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div class="lbl"><b>Autenticación</b><span>Bearer token en todas las peticiones a /v1 y /mcp</span></div>
+              <label class="switch"><input type="checkbox" id="swAuth" checked><span class="track"></span></label>
+            </div>
+            <div class="setting-row">
+              <div class="lbl"><b>Permitir acceso desde la red local</b><span>Otros dispositivos de tu LAN podrán consultar el cerebro</span></div>
+              <label class="switch"><input type="checkbox" id="swLan"><span class="track"></span></label>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Privacidad</div>
+          <div class="card">
+            <div class="setting-row">
+              <div class="lbl"><b>Modo estrictamente local</b><span>Embeddings y búsquedas se ejecutan en tu equipo; ningún contenido sale a Internet (los modelos se descargan una sola vez)</span></div>
+              <label class="switch"><input type="checkbox" checked disabled><span class="track"></span></label>
+            </div>
+            <div class="setting-row">
+              <div class="lbl"><b>Directorio de datos</b><span>Índice, configuración y modelos</span></div>
+              <div class="ctrl"><input class="input sm" type="text" id="inDataDir" readonly style="width:380px;font-family:var(--mono);font-size:11px"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Equipo detectado</div>
+          <div class="card">
+            <div class="setting-row"><div class="lbl"><b>CPU</b></div><div class="ctrl"><span id="hwCpu" style="font-size:12px;color:var(--text2)">…</span></div></div>
+            <div class="setting-row"><div class="lbl"><b>Memoria</b></div><div class="ctrl"><span id="hwRam" style="font-size:12px;color:var(--text2)">…</span></div></div>
+            <div class="setting-row"><div class="lbl"><b>GPU</b></div><div class="ctrl"><span id="hwGpu" style="font-size:12px;color:var(--text2)">…</span></div></div>
+            <div class="setting-row"><div class="lbl"><b>Sistema</b></div><div class="ctrl"><span id="hwOs" style="font-size:12px;color:var(--text2)">…</span></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ STATUS BAR ═══ -->
+    <footer class="statusbar">
+      <div class="sb-item"><span class="pulse-dot" id="sbDot"></span><span id="sbConn">Conectando…</span></div>
+      <div class="sb-item" id="sbIndex" hidden></div>
+      <div class="spacer"></div>
+      <div class="sb-item">Modelo <b id="sbModel">—</b></div>
+      <div class="sb-item">v<b id="sbVersion">—</b></div>
+    </footer>
+
+  </div>
+</div>
+
+<div id="cmdk">
+  <div class="cmdk-box">
+    <div class="cmdk-input">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+      </svg>
+      <input type="text" placeholder="Escribe un comando…" id="cmdkInput">
+    </div>
+    <div class="cmdk-list" id="cmdkList"></div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

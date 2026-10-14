@@ -1,0 +1,6 @@
+node_modules/
+dist/
+release/
+.smoke-home/
+.cerebro-data/
+*.log
