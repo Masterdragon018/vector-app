@@ -33,6 +33,9 @@ export class Indexer {
   private stopFlag = false;
   private pauseFlag = false;
   private busy = false;
+  /* Cola de peticiones que llegan mientras el indexador está ocupado: cada
+     carpeta se indexa de forma independiente y ninguna petición se pierde. */
+  private queued: { folderIds?: number[]; full?: boolean } | null = null;
   private rescanTimer: NodeJS.Timeout | null = null;
 
   constructor(private deps: IndexerDeps) {}
@@ -44,7 +47,20 @@ export class Indexer {
   /* ── Ciclo principal ─────────────────────────────────── */
 
   async start(opts: { folderIds?: number[]; full?: boolean } = {}): Promise<void> {
-    if (this.busy) return;
+    if (this.busy) {
+      // ya hay un ciclo en marcha: encolamos la petición (carpetas nuevas o
+      // full) en vez de descartarla en silencio
+      const prev = this.queued;
+      this.queued = {
+        full: prev?.full || opts.full === true,
+        folderIds:
+          opts.folderIds && opts.folderIds.length > 0
+            ? [...new Set([...(prev?.folderIds ?? []), ...opts.folderIds])]
+            : prev?.folderIds // undefined = todas
+      };
+      this.set({ message: 'En cola: se procesará al terminar el ciclo actual…' });
+      return;
+    }
     this.busy = true;
     this.stopFlag = false;
     this.pauseFlag = false;
@@ -71,6 +87,12 @@ export class Indexer {
       this.state.paused = false;
       this.busy = false;
       this.emit();
+    }
+    // peticiones encoladas durante el ciclo → siguiente vuelta
+    if (this.queued && !this.stopFlag) {
+      const q = this.queued;
+      this.queued = null;
+      void this.start(q);
     }
   }
 
@@ -136,7 +158,15 @@ export class Indexer {
     for (const folder of targets) {
       if (this.stopFlag) return;
       await this.waitIfPaused();
-      await this.scanOne(folder, full);
+      /* Cada carpeta se procesa de forma independiente: un error en una
+         (permisos, disco desconectado…) no interrumpe a las demás. */
+      try {
+        await this.scanOne(folder, full);
+      } catch (e: any) {
+        this.deps.db.setFolderStatus(folder.id, 'error', e.message);
+        this.deps.db.refreshFolderCounters(folder.id);
+        this.set({ message: `${folder.name}: ${e.message} · continúo con la siguiente carpeta` });
+      }
       this.deps.onFoldersChanged();
     }
     this.deps.onStatsChanged();

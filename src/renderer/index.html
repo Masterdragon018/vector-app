@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:;">
 <title>Cerebro Local</title>
+<link rel="icon" type="image/png" href="logo.png">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -14,7 +15,7 @@
   <!-- ═══════ SIDEBAR ═══════ -->
   <aside class="sidebar">
     <div class="brand">
-      <div class="brand-mark"></div>
+      <img class="brand-mark" src="logo.png" alt="Cerebro Local">
       <div class="brand-text">
         <b>Cerebro Local</b>
         <span>Vector Store</span>
@@ -73,6 +74,14 @@
         </svg>
         <span>Conexión</span>
       </button>
+      <button class="nav-item" data-view="clientes">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+        <span>Clientes</span>
+        <span class="badge" id="navClients" hidden>0</span>
+      </button>
       <button class="nav-item" data-view="registro">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/>
@@ -91,9 +100,9 @@
 
     <div class="storage" id="storageBox">
       <div class="row"><b>Almacenamiento</b><span id="stBytes">—</span></div>
-      <div class="storage-bar"><i style="width:12%;background:linear-gradient(90deg,#8b5cf6,#a78bfa)"></i></div>
+      <div class="storage-bar"><i style="width:12%;background:linear-gradient(90deg,#3b82f6,#60a5fa)"></i></div>
       <div class="storage-legend">
-        <span><i style="background:#a78bfa"></i>Índice</span>
+        <span><i style="background:#60a5fa"></i>Índice</span>
         <span><i style="background:#67e8f9"></i>Modelos</span>
       </div>
     </div>
@@ -142,7 +151,7 @@
         </div>
 
         <div class="home-filters">
-          <button class="chip active" data-filter="all"><i style="background:#a78bfa"></i>Todas</button>
+          <button class="chip active" data-filter="all"><i style="background:#60a5fa"></i>Todas</button>
           <button class="chip" data-filter="ok"><i style="background:#34d399"></i>Vectorizadas</button>
           <button class="chip" data-filter="index"><i style="background:#fbbf24"></i>Indexando</button>
           <button class="chip" data-filter="pending"><i style="background:#626b7e"></i>Pendientes</button>
@@ -519,6 +528,26 @@
               </svg>
               Copiar prompt de configuración para el agente
             </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ VISTA: CLIENTES ═══ -->
+    <section class="view" id="view-clientes">
+      <div class="page" style="max-width:none">
+        <div class="page-head">
+          <div class="txt">
+            <h2>Clientes conectados</h2>
+            <p>Agentes y aplicaciones que están consultando este cerebro mediante MCP o la API REST. El servicio sigue activo aunque cierres esta ventana.</p>
+          </div>
+          <div class="actions">
+            <span class="tag green" id="clientsActiveTag"><span class="dot" style="width:6px;height:6px"></span>0 activos</span>
+          </div>
+        </div>
+        <div class="card">
+          <div id="clientsBox">
+            <p style="font-size:12px;color:var(--muted2);padding:16px">Nadie ha conectado todavía. Configura un agente en la vista «Conexión» y aparecerá aquí en cuanto haga su primera petición.</p>
           </div>
         </div>
       </div>

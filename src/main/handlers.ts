@@ -42,6 +42,8 @@ export const coreHandlers: Record<string, CoreHandler> = {
   'model:download': (c, id: string) => c.downloadModel(id),
   'model:select': (c, id: string) => c.selectModel(id),
 
+  'clients:list': (c) => c.listClients(),
+
   'settings:get': (c) => c.getSettings(),
   'settings:set': (c, patch: any) => c.updateSettings(patch),
   'token:regenerate': async (c) => {

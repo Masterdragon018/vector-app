@@ -50,5 +50,6 @@ await build({
 await mkdir('dist/renderer', { recursive: true });
 await cp('src/renderer/index.html', 'dist/renderer/index.html');
 await cp('src/renderer/styles.css', 'dist/renderer/styles.css');
+await cp('src/renderer/logo.png', 'dist/renderer/logo.png');
 
 console.log('✓ build completo → dist/');

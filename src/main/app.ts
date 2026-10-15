@@ -8,9 +8,12 @@ import { EmbeddingEngine } from './models/engine';
 import { detectHardware, getModel, recommendModel, MODEL_CATALOG } from './models/catalog';
 import { Indexer } from './index/indexer';
 import { CerebroServer } from './server';
+import { ClientRegistry } from './clients';
 import { dispatchCore } from './handlers';
 import type {
   ActiveModel,
+  ClientInfo,
+  ComputeDevice,
   CerebroEvent,
   HardwareInfo,
   ModelRecommendation,
@@ -25,6 +28,7 @@ export interface CerebroSnapshot {
   settings: Settings;
   activeModel: ActiveModel | null;
   server: ServerStatus;
+  device: ComputeDevice;
 }
 
 export class CerebroApp {
@@ -32,6 +36,7 @@ export class CerebroApp {
   readonly modelsDir: string;
   readonly config: ConfigStore;
   readonly logger = new Logger();
+  readonly clients = new ClientRegistry();
   db!: CerebroDb;
   engine!: EmbeddingEngine;
   indexer!: Indexer;
@@ -58,14 +63,27 @@ export class CerebroApp {
     );
 
     const rec = app.currentRecommendation();
-    if (!s.embedding.modelId) {
+    // migración: si el modelo configurado ya no existe en el catálogo (p. ej. se
+    // redujo a 3 modelos), se sustituye por el recomendado para este equipo
+    let modelId = s.embedding.modelId;
+    if (modelId && !getModel(modelId)) {
+      app.logger.warn(`El modelo «${modelId}» ya no está disponible · usando ${rec.modelId}`);
+      modelId = null;
+    }
+    if (!modelId) {
       app.config.set({ embedding: { modelId: rec.modelId } });
       app.logger.info(`Modelo recomendado para este equipo: ${rec.modelId} (${rec.tier})`);
+      modelId = rec.modelId;
     }
 
-    const model = getModel(app.config.get().embedding.modelId ?? rec.modelId)!;
+    const model = getModel(modelId!)!;
     app.db = new CerebroDb({ dataDir: app.dataDir, dim: model.dim, modelId: model.id });
-    app.engine = new EmbeddingEngine(app.modelsDir);
+
+    // GPU: si hay gráfica NVIDIA y el runtime CUDA está disponible (scripts/setup-gpu.mjs),
+    // los embeddings se ejecutan en la GPU (~14× más rápido); si no, en CPU.
+    const preferDevice: ComputeDevice =
+      process.platform === 'linux' && process.arch === 'x64' && app.hardware.gpus.length > 0 ? 'cuda' : 'cpu';
+    app.engine = new EmbeddingEngine(app.modelsDir, preferDevice);
     app.indexer = new Indexer({
       db: app.db,
       engine: app.engine,
@@ -82,6 +100,8 @@ export class CerebroApp {
       indexer: app.indexer,
       logger: app.logger,
       getSettings: () => app.config.get(),
+      clients: app.clients,
+      onClientsChanged: () => app.emit({ type: 'clients:changed' }),
       // la UI web (navegador) usa los mismos canales que el IPC de Electron
       dispatch: (channel, args) => dispatchCore(app, channel, args),
       onEvent: (cb) => app.onEvent(cb as (ev: CerebroEvent) => void)
@@ -92,6 +112,35 @@ export class CerebroApp {
       app.emit({ type: 'server:status', status: app.serverStatus() });
     }
     return app;
+  }
+
+  /* Precarga del modelo de embeddings: siempre al arrancar, pase lo que pase.
+     Descarga la caché si falta y calienta la tubería (CPU o GPU) para que la
+     primera búsqueda del usuario no pague el coste de carga. No bloquea el
+     arranque: se lanza en segundo plano y su progreso va al registro. */
+  async preloadModel(): Promise<void> {
+    const model = getModel(this.config.get().embedding.modelId ?? '');
+    if (!model) return;
+    const t0 = Date.now();
+    const deviceLabel = this.engine.computeDevice === 'cuda' ? 'GPU' : 'CPU';
+    try {
+      this.logger.info(`Preparando modelo ${model.id} (${deviceLabel})…`);
+      await this.engine.preload(model, (ev) => {
+        if (ev.status === 'progress' && ev.file) {
+          this.logger.info(`Descargando ${model.id} · ${ev.file} ${Math.round(ev.progress ?? 0)}%`);
+        } else if (ev.status === 'start') {
+          this.logger.info(`Descargando modelo ${model.id}…`);
+        }
+      });
+      this.logger.ok(
+        `Modelo ${model.id} listo en ${((Date.now() - t0) / 1000).toFixed(1)} s · embeddings en ${
+          this.engine.computeDevice === 'cuda' ? 'GPU (CUDA)' : 'CPU'
+        }`
+      );
+    } catch (e: any) {
+      // un fallo de precarga no debe tumbar el arranque: el indexador lo reintentará
+      this.logger.warn(`No se pudo precargar el modelo: ${e.message}`);
+    }
   }
 
   /* ── Eventos ─────────────────────────────────────────── */
@@ -135,8 +184,15 @@ export class CerebroApp {
       dim: model.dim,
       downloaded: this.engine.isDownloaded(model),
       downloadedMB: this.engine.downloadedMB(model),
-      ready: this.engine.isDownloaded(model)
+      ready: this.engine.isDownloaded(model),
+      device: this.engine.computeDevice
     };
+  }
+
+  /* ── Clientes ───────────────────────────────────────── */
+
+  listClients(): ClientInfo[] {
+    return this.clients.list();
   }
 
   async downloadModel(modelId: string): Promise<{ ok: boolean; error?: string }> {
@@ -312,7 +368,8 @@ export class CerebroApp {
       recommendation: this.currentRecommendation(),
       settings: this.config.get(),
       activeModel: this.activeModelInfo(),
-      server: this.serverStatus()
+      server: this.serverStatus(),
+      device: this.engine.computeDevice
     };
   }
 

@@ -1,5 +1,6 @@
 /* Renderer: conecta la interfaz (basada en el borrador) al cerebro real vía IPC */
 import type {
+  ClientInfo,
   CerebroApi,
   CerebroEvent,
   FolderInfo,
@@ -105,6 +106,7 @@ let progress: IndexProgress | null = null;
 let serverSt: ServerStatus | null = null;
 let rec: ModelRecommendation | null = null;
 let activeModelId: string | null = null;
+let computeDevice: 'cuda' | 'cpu' = 'cpu';
 let searchLatency = 0;
 
 /* ═════════ Navegación ═════════ */
@@ -116,6 +118,7 @@ const TITLES: Record<string, [string, string]> = {
   modelos: ['Modelos', 'embeddings y fragmentación'],
   playground: ['Playground', 'prueba el cerebro'],
   conexion: ['Conexión', 'MCP · API'],
+  clientes: ['Clientes', 'agentes conectados'],
   registro: ['Registro', 'eventos en vivo'],
   ajustes: ['Ajustes', 'configuración general']
 };
@@ -123,12 +126,13 @@ const TITLES: Record<string, [string, string]> = {
 function go(view: string): void {
   $$('.view').forEach((v) => v.classList.remove('active'));
   document.getElementById(`view-${view}`)?.classList.add('active');
-  $$('.nav-item').forEach((n) => n.classList.toggle('active', n.dataset.view === view));
-  const t = TITLES[view] ?? ['', ''];
+  $$('.nav-item').forEach((n) => n.classList.toggle('active', n.dataset.view === view));  const t = TITLES[view] ?? ['', ''];
   $('#topTitle').textContent = t[0];
   $('#topSub').textContent = t[1];
   if (view === 'home') scheduleCanvasResize();
+
   if (view === 'resumen') void refreshStats();
+  if (view === 'clientes') void refreshClients();
 }
 
 $$('.nav-item').forEach((b) => b.addEventListener('click', () => go(b.dataset.view!)));
@@ -215,7 +219,7 @@ function draw(now: number): void {
     cy = H / 2;
 
   const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * 0.6);
-  grad.addColorStop(0, 'rgba(139,92,246,.08)');
+  grad.addColorStop(0, 'rgba(59,130,246,.08)');
   grad.addColorStop(0.5, 'rgba(34,211,238,.022)');
   grad.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = grad;
@@ -235,7 +239,7 @@ function draw(now: number): void {
     ctx.beginPath();
     ctx.moveTo(A.x, A.y);
     ctx.lineTo(B.x, B.y);
-    ctx.strokeStyle = hot ? 'rgba(167,139,250,.45)' : dim ? 'rgba(139,92,246,.035)' : 'rgba(139,92,246,.11)';
+    ctx.strokeStyle = hot ? 'rgba(96,165,250,.45)' : dim ? 'rgba(59,130,246,.035)' : 'rgba(59,130,246,.11)';
     ctx.lineWidth = hot ? 1.5 : 1;
     ctx.stroke();
     // partícula viajando
@@ -245,7 +249,7 @@ function draw(now: number): void {
       const y = A.y + (B.y - A.y) * p;
       ctx.beginPath();
       ctx.arc(x, y, hot ? 2.2 : 1.6, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(196,181,253,${(hot ? 0.95 : 0.55) * Math.sin(p * Math.PI)})`;
+      ctx.fillStyle = `rgba(147,197,253,${(hot ? 0.95 : 0.55) * Math.sin(p * Math.PI)})`;
       ctx.fill();
     }
   });
@@ -256,25 +260,25 @@ function draw(now: number): void {
   for (let k = 0; k < 3; k++) {
     ctx.beginPath();
     ctx.arc(cx, cy, coreR + 16 + k * 20 + pulse * 6, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(139,92,246,${0.13 - k * 0.035})`;
+    ctx.strokeStyle = `rgba(59,130,246,${0.13 - k * 0.035})`;
     ctx.stroke();
   }
   const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * 2.6);
-  cg.addColorStop(0, 'rgba(167,139,250,.42)');
-  cg.addColorStop(1, 'rgba(139,92,246,0)');
+  cg.addColorStop(0, 'rgba(96,165,250,.42)');
+  cg.addColorStop(1, 'rgba(59,130,246,0)');
   ctx.beginPath();
   ctx.arc(cx, cy, coreR * 2.6, 0, Math.PI * 2);
   ctx.fillStyle = cg;
   ctx.fill();
   const coreFill = ctx.createRadialGradient(cx - 8, cy - 8, 2, cx, cy, coreR);
-  coreFill.addColorStop(0, '#c9b8ff');
-  coreFill.addColorStop(0.55, '#8b5cf6');
+  coreFill.addColorStop(0, '#bfdbfe');
+  coreFill.addColorStop(0.55, '#3b82f6');
   coreFill.addColorStop(1, '#5b21b6');
   ctx.beginPath();
   ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
   ctx.fillStyle = coreFill;
   ctx.shadowBlur = 32;
-  ctx.shadowColor = 'rgba(139,92,246,.75)';
+  ctx.shadowColor = 'rgba(59,130,246,.75)';
   ctx.fill();
   ctx.shadowBlur = 0;
   ctx.font = '600 10px Inter,sans-serif';
@@ -877,7 +881,7 @@ async function refreshStats(): Promise<void> {
   const dist = st.extDistribution as { ext: string; count: number }[];
   if (dist.length > 0) {
     const total = dist.reduce((a, d) => a + d.count, 0) || 1;
-    const colors = ['#8b5cf6', '#22d3ee', '#34d399', '#fbbf24', '#f87171', '#232a3a'];
+    const colors = ['#3b82f6', '#22d3ee', '#34d399', '#fbbf24', '#f87171', '#232a3a'];
     $('#distBox').innerHTML = `<div class="donut-legend">${dist
       .map(
         (d, i) => `<div class="li"><i style="background:${colors[i % colors.length]}"></i><span class="n">${esc(d.ext)}</span><span class="v">${nf(d.count)} · ${Math.round((d.count / total) * 100)}%</span></div>`
@@ -987,7 +991,8 @@ function updateStatusbar(): void {
   $('#sbDot').style.background = serverSt?.running ? '' : 'var(--red)';
   $('#sideStatus').textContent = serverSt?.running ? `Servidor activo · :${serverSt.port}` : 'Servidor caído';
   $('#sideDot').className = `dot ${serverSt?.running ? '' : 'off'}`;
-  $('#sbModel').textContent = activeModelId ?? settings?.embedding.modelId ?? '—';
+  const devTag = computeDevice === 'cuda' ? ' · GPU' : '';
+  $('#sbModel').textContent = (activeModelId ?? settings?.embedding.modelId ?? '—') + devTag;
   $('#sbVersion').textContent = APP_VERSION;
   const sbIndex = $('#sbIndex');
   if (progress?.running) {
@@ -1029,8 +1034,74 @@ api.onEvent((ev: CerebroEvent) => {
     case 'model:download':
       if (ev.status === 'done') toast(`Modelo ${ev.modelId} listo`, 'ok');
       break;
+    case 'clients:changed':
+      if (document.querySelector('#view-clientes.active')) void refreshClients();
+      else void refreshClientBadge();
+      break;
   }
 });
+
+/* ═════════ Clientes ═════════ */
+let clients: ClientInfo[] = [];
+
+async function refreshClients(): Promise<void> {
+  try {
+    clients = await invoke<ClientInfo[]>('clients:list');
+  } catch {
+    return;
+  }
+  renderClients();
+  void refreshClientBadge();
+}
+
+async function refreshClientBadge(): Promise<void> {
+  try {
+    clients = await invoke<ClientInfo[]>('clients:list');
+  } catch {
+    return;
+  }
+  const act = clients.filter((c) => c.active).length;
+  const badge = $('#navClients');
+  badge.hidden = clients.length === 0;
+  badge.textContent = String(act);
+  badge.classList.toggle('live', act > 0);
+  const tag = $('#clientsActiveTag');
+  if (tag) tag.innerHTML = `<span class="dot" style="width:6px;height:6px"></span>${act} activos`;
+}
+
+function ago(ts: number): string {
+  const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  if (s < 60) return `hace ${s} s`;
+  if (s < 3600) return `hace ${Math.round(s / 60)} min`;
+  return new Date(ts).toLocaleString('es-ES');
+}
+
+function renderClients(): void {
+  const box = $('#clientsBox');
+  if (clients.length === 0) {
+    box.innerHTML =
+      '<p class="clients-empty">Nadie ha conectado todavía. Configura un agente en la vista «Conexión» y aparecerá aquí en cuanto haga su primera petición.</p>';
+    return;
+  }
+  box.innerHTML = `<table class="clients-table">
+    <thead><tr><th>Cliente</th><th>Tipo</th><th>Origen</th><th>Peticiones</th><th>Última actividad</th></tr></thead>
+    <tbody>${clients
+      .map(
+        (c) => `<tr>
+      <td><div class="cname"><span class="cdot ${c.active ? 'on' : 'off'}"></span><b>${esc(c.name)}</b></div></td>
+      <td><span class="tag ${c.kind === 'MCP' ? 'purple' : 'cyan'}">${c.kind}</span></td>
+      <td class="mono">${esc(c.ip)}${c.lastTool ? ` · ${esc(c.lastTool)}` : ''}</td>
+      <td>${nf(c.requests)}</td>
+      <td>${ago(c.lastSeen)}</td>
+    </tr>`
+      )
+      .join('')}</tbody></table>`;
+}
+
+/* refresco periódico cuando la vista está visible */
+setInterval(() => {
+  if (document.querySelector('#view-clientes.active')) void refreshClients();
+}, 5000);
 
 /* ═════════ Command palette ═════════ */
 const CMDS: { g: string; i: string; v?: string; a?: string }[] = [
@@ -1139,6 +1210,7 @@ async function boot(): Promise<void> {
   settings = snap.settings;
   serverSt = snap.server;
   activeModelId = snap.activeModel?.id ?? null;
+  computeDevice = snap.device ?? snap.activeModel?.device ?? 'cpu';
 
   renderSettings();
   renderHardware(snap.hardware);
@@ -1157,6 +1229,7 @@ async function boot(): Promise<void> {
   await refreshStats();
 
   setInterval(() => void refreshStats(), 5000);
+  void refreshClientBadge();
 }
 
 void (async function tryBoot() {

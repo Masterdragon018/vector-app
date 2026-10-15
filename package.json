@@ -1,20 +1,25 @@
 {
   "name": "cerebro-local",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Vectoriza tus carpetas y conéctalas a tus agentes mediante MCP o API — 100% local",
   "main": "dist/main/index.js",
   "license": "MIT",
   "author": "Cerebro Local",
-  "homepage": "https://github.com/cerebro-local/cerebro-local",
+  "homepage": "https://github.com/Masterdragon018/vector-app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Masterdragon018/vector-app.git"
+  },
   "scripts": {
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
     "smoke": "tsx scripts/smoke.ts",
+    "gpu:setup": "node scripts/setup-gpu.mjs",
     "rebuild:electron": "electron-rebuild -f -w better-sqlite3",
     "rebuild:node": "npm rebuild better-sqlite3",
     "start": "npm run build && node dist/main/web.js",
     "app": "npm run build && npm run rebuild:electron && electron .",
-    "dist": "npm run build && electron-builder"
+    "dist": "npm run gpu:setup && npm run build && electron-builder"
   },
   "build": {
     "appId": "local.cerebro.app",
@@ -24,7 +29,8 @@
     },
     "files": [
       "dist/**/*",
-      "package.json"
+      "package.json",
+      "LICENSE"
     ],
     "asarUnpack": [
       "**/node_modules/better-sqlite3/**",

@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { ModelInfo } from '../../shared/types';
+import type { ComputeDevice, ModelInfo } from '../../shared/types';
 
 export interface DownloadEvent {
   modelId: string;
@@ -21,10 +21,15 @@ type ProgressCb = (ev: DownloadEvent) => void;
 export class EmbeddingEngine {
   private pipe: any = null;
   private pipeModelId: string | null = null;
-  private busy = false;
-  private queue: { resolve: (v: any) => void; reject: (e: any) => void }[] = [];
+  private device: ComputeDevice = 'cpu';
 
-  constructor(private modelsDir: string) {}
+  constructor(private modelsDir: string, preferDevice: ComputeDevice = 'cpu') {
+    this.device = preferDevice;
+  }
+
+  get computeDevice(): ComputeDevice {
+    return this.device;
+  }
 
   isDownloaded(model: ModelInfo): boolean {
     const dir = join(this.modelsDir, model.repo);
@@ -53,24 +58,19 @@ export class EmbeddingEngine {
     }
   }
 
-  /* Descarga (o completa) la caché local del modelo, con progreso. */
-  async ensureModel(model: ModelInfo, onProgress?: ProgressCb): Promise<void> {
-    if (this.isDownloaded(model)) {
-      onProgress?.({ modelId: model.id, status: 'done', progress: 1 });
-      return;
-    }
-    mkdirSync(this.modelsDir, { recursive: true });
+  /* Crea la tubería ONNX en el dispositivo pedido. Si la GPU falla en el último
+     momento (driver, VRAM…), se cae a CPU y se recuerda para no reintentar. */
+  private async createPipeline(model: ModelInfo, onProgress?: ProgressCb): Promise<any> {
     const { env, pipeline } = await import('@huggingface/transformers');
     env.cacheDir = this.modelsDir;
     env.allowLocalModels = true;
-    onProgress?.({ modelId: model.id, status: 'start' });
-
-    const files = await pipeline('feature-extraction', model.repo, {
-      dtype: 'fp32',
-      device: 'cpu',
+    const opts = {
+      dtype: 'fp32' as const,
+      device: this.device,
       progress_callback: (p: any) => {
+        if (!onProgress) return;
         if (p.status === 'progress') {
-          onProgress?.({
+          onProgress({
             modelId: model.id,
             status: 'progress',
             file: p.file,
@@ -79,22 +79,60 @@ export class EmbeddingEngine {
             total: p.total ?? 0
           });
         } else if (p.status === 'done') {
-          onProgress?.({ modelId: model.id, status: 'progress', file: p.file, progress: 100 });
+          onProgress({ modelId: model.id, status: 'progress', file: p.file, progress: 100 });
         }
       }
-    });
-    // mantenemos la tubería cargada si coincide con el modelo pedido
-    this.pipe = files;
-    this.pipeModelId = model.id;
+    };
+    try {
+      return await pipeline('feature-extraction', model.repo, opts);
+    } catch (e: any) {
+      if (this.device !== 'cuda') throw e;
+      this.device = 'cpu';
+      throw new Error(
+        `GPU no disponible (${String(e.message).split('\n')[0]}). Reintenta con CPU.`
+      );
+    }
+  }
+
+  /* Descarga (o completa) la caché local del modelo, con progreso. */
+  async ensureModel(model: ModelInfo, onProgress?: ProgressCb): Promise<void> {
+    if (this.isDownloaded(model)) {
+      onProgress?.({ modelId: model.id, status: 'done', progress: 1 });
+      return;
+    }
+    mkdirSync(this.modelsDir, { recursive: true });
+    onProgress?.({ modelId: model.id, status: 'start' });
+
+    // la descarga siempre en CPU: solo queremos los ficheros en caché
+    const prevDevice = this.device;
+    this.device = 'cpu';
+    try {
+      this.pipe = await this.createPipeline(model, onProgress);
+      this.pipeModelId = model.id;
+    } finally {
+      this.device = prevDevice;
+    }
     onProgress?.({ modelId: model.id, status: 'done', progress: 100 });
+  }
+
+  /* Carga el modelo en memoria (calentamiento): evita el coste de la primera
+     búsqueda y da tiempo a que GPU/CPU esté lista antes de que lleguenconsultas. */
+  async warmup(model: ModelInfo): Promise<void> {
+    await this.getPipe(model);
+    // una pasada real descubre errores de runtime (driver, VRAM insuficiente…)
+    await this.embedQuery(model, 'cerebro listo');
   }
 
   private async getPipe(model: ModelInfo): Promise<any> {
     if (this.pipe && this.pipeModelId === model.id) return this.pipe;
-    const { env, pipeline } = await import('@huggingface/transformers');
-    env.cacheDir = this.modelsDir;
-    env.allowLocalModels = true;
-    this.pipe = await pipeline('feature-extraction', model.repo, { dtype: 'fp32', device: 'cpu' });
+    try {
+      this.pipe = await this.createPipeline(model);
+    } catch (e: any) {
+      if (this.device === 'cpu') throw e;
+      // reintento en CPU: preferencia de GPU, pero la búsqueda nunca falla por esto
+      this.device = 'cpu';
+      this.pipe = await this.createPipeline(model);
+    }
     this.pipeModelId = model.id;
     return this.pipe;
   }
@@ -141,6 +179,12 @@ export class EmbeddingEngine {
   unload(): void {
     this.pipe = null;
     this.pipeModelId = null;
+  }
+
+  /* Descarga y calienta el modelo en segundo plano; errores ya gestionados por el llamante. */
+  async preload(model: ModelInfo, onProgress?: ProgressCb): Promise<void> {
+    await this.ensureModel(model, onProgress);
+    await this.warmup(model);
   }
 }
 

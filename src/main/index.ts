@@ -1,10 +1,12 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } from 'electron';
 import { join } from 'node:path';
 import { CerebroApp } from './app';
 import { coreHandlers, type CoreHandler } from './handlers';
 
 let win: BrowserWindow | null = null;
 let cerebro: CerebroApp | null = null;
+let tray: Tray | null = null;
+let quitting = false;
 
 /* La UI puede invocar IPC antes de que el cerebro termine de inicializar (detección de
    hardware, DB, servidor). Esta promise elimina la carrera: los handlers esperan a que
@@ -22,6 +24,7 @@ function createWindow(): void {
     backgroundColor: '#080a0e',
     title: 'Cerebro Local',
     autoHideMenuBar: true,
+    icon: join(__dirname, '../renderer/logo.png'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -30,8 +33,49 @@ function createWindow(): void {
     }
   });
   void win.loadFile(join(__dirname, '../renderer/index.html'));
+
+  /* Cerrar la ventana NO mata el cerebro: la app sigue en segundo plano
+     (bandeja) para que los agentes sigan consultando por MCP/API. */
+  win.on('close', (e) => {
+    if (!quitting) {
+      e.preventDefault();
+      win?.hide();
+    }
+  });
   win.on('closed', () => {
     win = null;
+  });
+}
+
+function createTray(): void {
+  const iconPath = join(__dirname, '../renderer/logo.png');
+  const img = nativeImage.createFromPath(iconPath);
+  tray = new Tray(img);
+  tray.setToolTip('Cerebro Local · el cerebro sigue activo en segundo plano');
+  const menu = Menu.buildFromTemplate([
+    {
+      label: 'Abrir Cerebro Local',
+      click: () => {
+        win?.show();
+        win?.focus();
+      }
+    },
+    { type: 'separator' },
+    {
+      label: 'Salir',
+      click: () => {
+        quitting = true;
+        app.quit();
+      }
+    }
+  ]);
+  tray.setContextMenu(menu);
+  tray.on('click', () => {
+    if (win?.isVisible()) win.hide();
+    else {
+      win?.show();
+      win?.focus();
+    }
   });
 }
 
@@ -45,11 +89,14 @@ async function bootstrap(): Promise<void> {
   cerebro.onEvent(send);
   cerebro.logger.info('Cerebro listo · la interfaz puede usarlo');
 
-  // arranque automático del pipeline si hay trabajo pendiente
-  if (cerebro.getSettings().behavior.autoIndex && cerebro.indexer.hasWorkPending()) {
-    cerebro.logger.info('Indexación automática: hay archivos pendientes');
-    void cerebro.indexer.start({});
-  }
+  // 1. el modelo de embeddings SIEMPRE se carga al arrancar (en segundo plano)
+  void cerebro.preloadModel().then(() => {
+    // 2. …y solo entonces, si hay trabajo pendiente, se indexa
+    if (cerebro!.getSettings().behavior.autoIndex && cerebro!.indexer.hasWorkPending()) {
+      cerebro!.logger.info('Indexación automática: hay archivos pendientes');
+      void cerebro!.indexer.start({});
+    }
+  });
 }
 
 /* Espera a que el cerebro esté inicializado; si el arranque falló, lanza el error real. */
@@ -94,6 +141,7 @@ function registerIpc(): void {
 app.whenReady().then(async () => {
   registerIpc();
   createWindow();
+  createTray();
   try {
     await bootstrap();
   } catch (e: any) {
@@ -107,13 +155,16 @@ app.whenReady().then(async () => {
   });
 });
 
+/* Cerrar la ventana deja el servicio vivo (bandeja); solo «Salir» del menú
+   de bandeja o el fin de la sesión terminan el proceso. */
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  if (quitting) app.quit();
 });
 
 app.on('before-quit', (e) => {
   if (cerebro) {
     e.preventDefault();
+    quitting = true;
     void cerebro.shutdown().finally(() => {
       cerebro = null;
       app.quit();

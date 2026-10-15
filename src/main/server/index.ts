@@ -14,6 +14,7 @@ import type { Indexer } from '../index/indexer';
 import type { Logger } from '../logger';
 import type { Settings } from '../../shared/types';
 import { APP_VERSION } from '../../shared/version';
+import type { ClientRegistry } from '../clients';
 
 export interface ServerContext {
   db: CerebroDb;
@@ -21,6 +22,10 @@ export interface ServerContext {
   indexer: Indexer;
   logger: Logger;
   getSettings: () => Settings;
+  /* Registro de clientes conectados (MCP/API) para la vista «Clientes» */
+  clients?: ClientRegistry;
+  /* Aviso de que ha cambiado el conjunto de clientes */
+  onClientsChanged?: () => void;
   /* Despacho de canales de la UI web (mismos canales que el IPC de Electron) */
   dispatch?: (channel: string, args: unknown[]) => Promise<{ result?: unknown; error?: string }>;
   /* Suscripción a eventos push (para SSE /events) */
@@ -49,7 +54,38 @@ export class CerebroServer {
     this.app = express();
     this.app.use(express.json({ limit: '2mb' }));
     this.app.use(this.authMiddleware.bind(this));
+    this.app.use(this.trackClient.bind(this));
     this.registerRoutes();
+  }
+
+  /* Registro de clientes: cada petición autenticada a /v1 o /mcp cuenta como
+     actividad del cliente. En el initialize de MCP el agente declara su nombre. */
+  private trackClient(req: Request, res: Response, next: () => void): void {
+    if (!req.path.startsWith('/v1') && !req.path.startsWith('/mcp')) return next();
+    if (req.path === '/v1/salud') return next(); // el ping no cuenta como cliente
+    const reg = this.ctx.clients;
+    if (!reg) return next();
+
+    const kind: 'MCP' | 'API' = req.path.startsWith('/mcp') ? 'MCP' : 'API';
+    const ua = String(req.headers['user-agent'] ?? 'desconocido');
+    const ipRaw = req.ip ?? req.socket.remoteAddress ?? '?';
+    const ip = ipRaw.startsWith('::ffff:') ? ipRaw.slice(7) : ipRaw;
+
+    // nombre del agente MCP: viaja en el initialize (params.clientInfo.name)
+    let name: string | null = null;
+    let tool: string | null = null;
+    const body = (req as any).body;
+    if (kind === 'MCP' && body && typeof body === 'object') {
+      if (body.method === 'initialize') name = body.params?.clientInfo?.name ?? null;
+      if (body.method === 'tools/call') tool = String(body.params?.name ?? '') || null;
+    }
+
+    const { isNew } = reg.touch({ kind, ip, userAgent: ua, name, tool });
+    if (isNew) {
+      this.ctx.logger.info(`Cliente ${kind} conectado: ${ip}${name ? ` (${name})` : ''}`);
+      this.ctx.onClientsChanged?.();
+    }
+    next();
   }
 
   /* ── Auth: Bearer token (o desactivada) ──────────────── */

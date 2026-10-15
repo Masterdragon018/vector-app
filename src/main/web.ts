@@ -28,11 +28,14 @@ async function main(): Promise<void> {
   const st = cerebro.serverStatus();
   const url = st.url;
 
-  // arranque automático del pipeline si hay trabajo pendiente
-  if (cerebro.getSettings().behavior.autoIndex && cerebro.indexer.hasWorkPending()) {
-    cerebro.logger.info('Indexación automática: hay archivos pendientes');
-    void cerebro.indexer.start({});
-  }
+  // el modelo de embeddings SIEMPRE se carga al arrancar; después, si hay
+  // trabajo pendiente, se lanza la indexación
+  void cerebro.preloadModel().then(() => {
+    if (cerebro.getSettings().behavior.autoIndex && cerebro.indexer.hasWorkPending()) {
+      cerebro.logger.info('Indexación automática: hay archivos pendientes');
+      void cerebro.indexer.start({});
+    }
+  });
 
   console.log(`  ➜ Interfaz:  ${url}`);
   console.log(`  ➜ API:       ${url}/v1/buscar (Bearer ${st.token})`);

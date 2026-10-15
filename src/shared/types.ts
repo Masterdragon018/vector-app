@@ -33,7 +33,7 @@ export interface ModelInfo {
   minRamGB: number;
   multilingual: boolean;
   lang: string;
-  tier: 'ligero' | 'equilibrado' | 'potente' | 'maximo';
+  tier: 'ligero' | 'normal' | 'potente';
   prefixes?: { query?: string; passage?: string };
   desc: string;
 }
@@ -62,9 +62,12 @@ export interface ModelRecommendation {
   modelId: string;
   model: ModelInfo;
   reason: string;
-  tier: 'ligero' | 'equilibrado' | 'potente' | 'maximo';
+  tier: 'ligero' | 'normal' | 'potente';
   alternatives: string[];
 }
+
+/* Dispositivo donde se ejecutan los embeddings */
+export type ComputeDevice = 'cuda' | 'cpu';
 
 export interface ActiveModel {
   id: string;
@@ -72,6 +75,21 @@ export interface ActiveModel {
   downloaded: boolean;
   downloadedMB: number;
   ready: boolean;
+  device: ComputeDevice;
+}
+
+/* Cliente que ha conectado al servicio (agente MCP o app vía API REST) */
+export interface ClientInfo {
+  key: string;
+  kind: 'MCP' | 'API';
+  name: string;
+  ip: string;
+  userAgent: string;
+  requests: number;
+  firstSeen: number;
+  lastSeen: number;
+  lastTool: string | null;
+  active: boolean;
 }
 
 export interface SearchHit {
@@ -157,7 +175,8 @@ export type CerebroEvent =
   | { type: 'folders:changed' }
   | { type: 'stats:changed' }
   | { type: 'model:download'; modelId: string; status: string; progress: number; loaded: number; total: number }
-  | { type: 'server:status'; status: ServerStatus };
+  | { type: 'server:status'; status: ServerStatus }
+  | { type: 'clients:changed' };
 
 /* Superficie IPC expuesta al renderer vía preload */
 export interface CerebroApi {
