@@ -4,3 +4,13 @@ release/
 .smoke-home/
 .cerebro-data/
 *.log
+
+# Librerías CUDA (se instalan aparte, ver README)
+vendor/
+
+# Binarios nativos genéricos
+*.so
+*.so.*
+
+# Exceptuamos vec0.so si lo necesitas versionado
+!vec0.so
