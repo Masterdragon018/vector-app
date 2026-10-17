@@ -67,7 +67,7 @@ export interface ModelRecommendation {
 }
 
 /* Dispositivo donde se ejecutan los embeddings */
-export type ComputeDevice = 'cuda' | 'cpu';
+export type ComputeDevice = 'cuda' | 'dml' | 'cpu';
 
 export interface ActiveModel {
   id: string;

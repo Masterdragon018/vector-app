@@ -86,7 +86,7 @@ export class EmbeddingEngine {
     try {
       return await pipeline('feature-extraction', model.repo, opts);
     } catch (e: any) {
-      if (this.device !== 'cuda') throw e;
+      if (this.device === 'cpu') throw e;
       this.device = 'cpu';
       throw new Error(
         `GPU no disponible (${String(e.message).split('\n')[0]}). Reintenta con CPU.`

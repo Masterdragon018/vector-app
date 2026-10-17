@@ -79,10 +79,17 @@ export class CerebroApp {
     const model = getModel(modelId!)!;
     app.db = new CerebroDb({ dataDir: app.dataDir, dim: model.dim, modelId: model.id });
 
-    // GPU: si hay gráfica NVIDIA y el runtime CUDA está disponible (scripts/setup-gpu.mjs),
-    // los embeddings se ejecutan en la GPU (~14× más rápido); si no, en CPU.
+    // GPU: si hay gráfica disponible, los embeddings van a la GPU cuando sea posible:
+    //   · Linux x64 → CUDA (runtime local vía scripts/setup-gpu.mjs, ~14× más rápido)
+    //   · Windows   → DirectML (EP incluido en onnxruntime-node para win32, usa la RTX/GTX vía DirectX)
+    //   · si falla el EP de GPU, el motor cae a CPU automáticamente.
+    const hasGpu = app.hardware.gpus.length > 0;
     const preferDevice: ComputeDevice =
-      process.platform === 'linux' && process.arch === 'x64' && app.hardware.gpus.length > 0 ? 'cuda' : 'cpu';
+      process.platform === 'linux' && process.arch === 'x64' && hasGpu
+        ? 'cuda'
+        : process.platform === 'win32' && hasGpu
+          ? 'dml'
+          : 'cpu';
     app.engine = new EmbeddingEngine(app.modelsDir, preferDevice);
     app.indexer = new Indexer({
       db: app.db,
@@ -122,7 +129,7 @@ export class CerebroApp {
     const model = getModel(this.config.get().embedding.modelId ?? '');
     if (!model) return;
     const t0 = Date.now();
-    const deviceLabel = this.engine.computeDevice === 'cuda' ? 'GPU' : 'CPU';
+    const deviceLabel = this.engine.computeDevice === 'cpu' ? 'CPU' : 'GPU';
     try {
       this.logger.info(`Preparando modelo ${model.id} (${deviceLabel})…`);
       await this.engine.preload(model, (ev) => {
@@ -134,7 +141,11 @@ export class CerebroApp {
       });
       this.logger.ok(
         `Modelo ${model.id} listo en ${((Date.now() - t0) / 1000).toFixed(1)} s · embeddings en ${
-          this.engine.computeDevice === 'cuda' ? 'GPU (CUDA)' : 'CPU'
+          this.engine.computeDevice === 'cuda'
+            ? 'GPU (CUDA)'
+            : this.engine.computeDevice === 'dml'
+              ? 'GPU (DirectML)'
+              : 'CPU'
         }`
       );
     } catch (e: any) {

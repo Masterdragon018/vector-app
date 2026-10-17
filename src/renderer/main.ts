@@ -106,7 +106,7 @@ let progress: IndexProgress | null = null;
 let serverSt: ServerStatus | null = null;
 let rec: ModelRecommendation | null = null;
 let activeModelId: string | null = null;
-let computeDevice: 'cuda' | 'cpu' = 'cpu';
+let computeDevice: 'cuda' | 'dml' | 'cpu' = 'cpu';
 let searchLatency = 0;
 
 /* ═════════ Navegación ═════════ */
@@ -991,7 +991,7 @@ function updateStatusbar(): void {
   $('#sbDot').style.background = serverSt?.running ? '' : 'var(--red)';
   $('#sideStatus').textContent = serverSt?.running ? `Servidor activo · :${serverSt.port}` : 'Servidor caído';
   $('#sideDot').className = `dot ${serverSt?.running ? '' : 'off'}`;
-  const devTag = computeDevice === 'cuda' ? ' · GPU' : '';
+  const devTag = computeDevice === 'cpu' ? '' : ' · GPU';
   $('#sbModel').textContent = (activeModelId ?? settings?.embedding.modelId ?? '—') + devTag;
   $('#sbVersion').textContent = APP_VERSION;
   const sbIndex = $('#sbIndex');
