@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ComputeDevice, ModelInfo } from '../../shared/types';
 
@@ -13,6 +13,20 @@ export interface DownloadEvent {
 
 type ProgressCb = (ev: DownloadEvent) => void;
 
+/* onnxruntime-node NO lanza si el EP de GPU no carga: avisa y sigue en CPU.
+   Esto comprueba de verdad si el backend de GPU quedó cargado en el proceso
+   (Linux: libs CUDA mapeadas). En otras plataformas no se puede verificar de
+   forma barata, así que se confía en el EP. */
+function gpuBackendLoaded(): boolean {
+  if (process.platform !== 'linux') return true;
+  try {
+    const maps = readFileSync('/proc/self/maps', 'utf8');
+    return /libcudart|libonnxruntime_providers_cuda/.test(maps);
+  } catch {
+    return true;
+  }
+}
+
 /**
  * Motor de embeddings 100% local sobre ONNX Runtime (transfieres los modelos
  * de Hugging Face al arrancar; sin servidor ni claves).
@@ -22,40 +36,50 @@ export class EmbeddingEngine {
   private pipe: any = null;
   private pipeModelId: string | null = null;
   private device: ComputeDevice = 'cpu';
+  private onWarn: ((msg: string) => void) | null = null;
 
-  constructor(private modelsDir: string, preferDevice: ComputeDevice = 'cpu') {
+  constructor(private modelsDir: string, preferDevice: ComputeDevice = 'cpu', onWarn?: (msg: string) => void) {
     this.device = preferDevice;
+    this.onWarn = onWarn ?? null;
   }
 
   get computeDevice(): ComputeDevice {
     return this.device;
   }
 
+  /* Suma el tamaño de los .onnx/.onnx_data del modelo buscando también en
+     subcarpetas (transformers.js los guarda en <repo>/onnx/). Si solo se mira
+     la raíz, el modelo parece no descargado y se acaba creando una tubería CPU
+     duplicada (2 GB en RAM) además de la de GPU. */
+  private onnxTotalBytes(dir: string): number {
+    try {
+      const entries = readdirSync(dir, { recursive: true }) as string[];
+      let total = 0;
+      for (const rel of entries) {
+        if (typeof rel !== 'string') continue;
+        if (!rel.endsWith('.onnx') && !rel.endsWith('.onnx_data')) continue;
+        try {
+          total += statSync(join(dir, rel)).size;
+        } catch {
+          /* archivo desaparecido durante el escaneo */
+        }
+      }
+      return total;
+    } catch {
+      return 0;
+    }
+  }
+
   isDownloaded(model: ModelInfo): boolean {
     const dir = join(this.modelsDir, model.repo);
     if (!existsSync(dir)) return false;
-    try {
-      const names = readdirSync(dir);
-      const onnx = names.filter((n) => n.endsWith('.onnx') || n.endsWith('.onnx_data'));
-      if (onnx.length === 0) return false;
-      const total = onnx.reduce((acc, n) => acc + statSync(join(dir, n)).size, 0);
-      return total > model.downloadMB * 0.5 * 1024 * 1024;
-    } catch {
-      return false;
-    }
+    return this.onnxTotalBytes(dir) > model.downloadMB * 0.5 * 1024 * 1024;
   }
 
   downloadedMB(model: ModelInfo): number {
     const dir = join(this.modelsDir, model.repo);
     if (!existsSync(dir)) return 0;
-    try {
-      const names = readdirSync(dir);
-      return Math.round(
-        names.reduce((acc, n) => acc + statSync(join(dir, n)).size, 0) / (1024 * 1024)
-      );
-    } catch {
-      return 0;
-    }
+    return Math.round(this.onnxTotalBytes(dir) / (1024 * 1024));
   }
 
   /* Crea la tubería ONNX en el dispositivo pedido. Si la GPU falla en el último
@@ -64,9 +88,10 @@ export class EmbeddingEngine {
     const { env, pipeline } = await import('@huggingface/transformers');
     env.cacheDir = this.modelsDir;
     env.allowLocalModels = true;
+    const wanted = this.device;
     const opts = {
       dtype: 'fp32' as const,
-      device: this.device,
+      device: wanted,
       progress_callback: (p: any) => {
         if (!onProgress) return;
         if (p.status === 'progress') {
@@ -83,15 +108,28 @@ export class EmbeddingEngine {
         }
       }
     };
+    let pipe: any;
     try {
-      return await pipeline('feature-extraction', model.repo, opts);
+      pipe = await pipeline('feature-extraction', model.repo, opts);
     } catch (e: any) {
-      if (this.device === 'cpu') throw e;
+      if (wanted === 'cpu') throw e;
+      const detail = String(e.message).split('\n')[0];
       this.device = 'cpu';
-      throw new Error(
-        `GPU no disponible (${String(e.message).split('\n')[0]}). Reintenta con CPU.`
+      this.onWarn?.(
+        `GPU ${wanted.toUpperCase()} no disponible (${detail}). Se usará CPU para este modelo.`
       );
+      throw new Error(`GPU no disponible (${detail}). Reintenta con CPU.`);
     }
+    /* onnxruntime no lanza cuando el EP de GPU no llega a cargarse: cae a CPU
+       en silencio y el modelo acaba en RAM. Verificamos el proceso real. */
+    if (wanted !== 'cpu' && !gpuBackendLoaded()) {
+      this.device = 'cpu';
+      this.onWarn?.(
+        `GPU ${wanted.toUpperCase()} solicitada pero no cargada: onnxruntime usa CPU (modelo en RAM).`
+      );
+      // la tubería ya está en CPU y funciona: reutilizarla (no recargar el modelo)
+    }
+    return pipe;
   }
 
   /* Descarga (o completa) la caché local del modelo, con progreso. */
@@ -107,11 +145,14 @@ export class EmbeddingEngine {
     const prevDevice = this.device;
     this.device = 'cpu';
     try {
-      this.pipe = await this.createPipeline(model, onProgress);
-      this.pipeModelId = model.id;
+      // solo para descargar: esta tubería es de CPU y no debe reutilizarse
+      await this.createPipeline(model, onProgress);
     } finally {
       this.device = prevDevice;
     }
+    // descarta la tubería de descarga: warmup creará la del dispositivo real
+    this.pipe = null;
+    this.pipeModelId = null;
     onProgress?.({ modelId: model.id, status: 'done', progress: 100 });
   }
 
@@ -125,10 +166,11 @@ export class EmbeddingEngine {
 
   private async getPipe(model: ModelInfo): Promise<any> {
     if (this.pipe && this.pipeModelId === model.id) return this.pipe;
+    const wanted = this.device;
     try {
       this.pipe = await this.createPipeline(model);
     } catch (e: any) {
-      if (this.device === 'cpu') throw e;
+      if (wanted === 'cpu') throw e;
       // reintento en CPU: preferencia de GPU, pero la búsqueda nunca falla por esto
       this.device = 'cpu';
       this.pipe = await this.createPipeline(model);

@@ -27,6 +27,10 @@ async function main(): Promise<void> {
   const cerebro = await CerebroApp.create(defaultBaseDir(), { startServer: true });
   const st = cerebro.serverStatus();
   const url = st.url;
+  const snap = await cerebro.snapshot();
+  const deviceLabel =
+    snap.device === 'cuda' ? 'GPU (CUDA)' : snap.device === 'dml' ? 'GPU (DirectML)' : 'CPU';
+  const gpuName = snap.hardware.gpus[0]?.name;
 
   // el modelo de embeddings SIEMPRE se carga al arrancar; después, si hay
   // trabajo pendiente, se lanza la indexación
@@ -40,8 +44,12 @@ async function main(): Promise<void> {
   console.log(`  ➜ Interfaz:  ${url}`);
   console.log(`  ➜ API:       ${url}/v1/buscar (Bearer ${st.token})`);
   console.log(`  ➜ MCP:       ${st.mcpUrl}`);
+  console.log(`  ➜ Motor:     ${deviceLabel}${gpuName ? ` · ${gpuName}` : ''}`);
+  console.log(`  ➜ Datos:     ${cerebro.dataDir}`);
   console.log('\n  Ctrl+C para detener.\n');
-  openBrowser(url);
+  // como servicio (pm2) no se abre navegador: CEREBRO_NO_OPEN=1 o --no-open
+  const noOpen = process.env.CEREBRO_NO_OPEN === '1' || process.argv.includes('--no-open');
+  if (!noOpen) openBrowser(url);
 
   let stopping = false;
   const stop = (sig: string): void => {

@@ -144,10 +144,20 @@
     <!-- ═══ VISTA: RED ═══ -->
     <section class="view active" id="view-home">
       <canvas id="net"></canvas>
+      <div class="home-stage" id="homeStage">
+        <div class="world" id="world">
+          <div class="home-core" id="homeCore">
+            <div class="core-halo"></div>
+            <i class="core-ring"></i><i class="core-ring"></i><i class="core-ring"></i>
+            <div class="core-orb"><span>CEREBRO</span></div>
+            <div class="core-meta"><b id="coreFiles">0</b> archivos · <span id="coreFolders">0</span> carpetas</div>
+          </div>
+        </div>
+      </div>
       <div class="home-ui">
         <div class="home-head">
-          <h2>Red de conocimiento</h2>
-          <p>Cada nodo es una carpeta vectorizada. El tamaño representa el volumen de archivos y el estado, su disponibilidad para los agentes.</p>
+          <h2>Lienzo infinito</h2>
+          <p>Un universo de carpetas vectorizadas. Arrastra el fondo para explorar, mueve cada carta a tu gusto y pasa el ratón para ver su estado.</p>
         </div>
 
         <div class="home-filters">
@@ -196,7 +206,15 @@
           </button>
         </div>
       </div>
-      <div id="nodeTip"></div>
+      <div class="home-hint" id="homeHint">
+        <span class="hint-key"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg>Arrastra el <b>lienzo</b></span>
+        <span class="hint-key"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8 11h6"/></svg>Rueda para <b>zoom</b></span>
+        <span class="hint-key"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="4"/></svg>Mueve una <b>carpeta</b></span>
+      </div>
+      <div class="minimap" id="minimap">
+        <canvas id="minimapCanvas"></canvas>
+        <span class="minimap-label">MAPA</span>
+      </div>
     </section>
 
     <!-- ═══ VISTA: RESUMEN ═══ -->
@@ -651,6 +669,29 @@
       <input type="text" placeholder="Escribe un comando…" id="cmdkInput">
     </div>
     <div class="cmdk-list" id="cmdkList"></div>
+  </div>
+</div>
+
+<div id="folderPicker" class="modal" hidden>
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="txt"><b>Elegir carpeta</b><span>Navega por el equipo del servidor y selecciona la carpeta a indexar.</span></div>
+      <button class="btn sm ghost" id="fpClose" title="Cerrar">✕</button>
+    </div>
+    <div class="fp-path">
+      <button class="btn sm ghost" id="fpUp" title="Subir un nivel">↑</button>
+      <input class="input sm" type="text" id="fpPathInput" placeholder="/ruta/absoluta" spellcheck="false">
+      <button class="btn sm" id="fpGo">Ir</button>
+    </div>
+    <div class="fp-roots" id="fpRoots"></div>
+    <div class="fp-list" id="fpList"></div>
+    <div class="modal-foot">
+      <span class="fp-current" id="fpCurrent"></span>
+      <div class="fp-actions">
+        <button class="btn sm ghost" id="fpCancel">Cancelar</button>
+        <button class="btn primary sm" id="fpSelect">Seleccionar esta carpeta</button>
+      </div>
+    </div>
   </div>
 </div>
 

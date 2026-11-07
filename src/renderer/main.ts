@@ -13,6 +13,7 @@ import type {
 } from '../shared/types';
 import { EXTENSIONS, PRESETS, SUPPORTED_EXTS } from '../shared/presets';
 import { APP_VERSION } from '../shared/version';
+import { HomeCanvas } from './home-canvas';
 
 declare global {
   interface Window {
@@ -111,7 +112,7 @@ let searchLatency = 0;
 
 /* ═════════ Navegación ═════════ */
 const TITLES: Record<string, [string, string]> = {
-  home: ['Red neuronal', 'conocimiento vectorizado'],
+  home: ['Red neuronal', 'lienzo infinito'],
   resumen: ['Resumen', 'estado en tiempo real'],
   carpetas: ['Carpetas', 'selecciona qué indexar'],
   tipos: ['Tipos de archivo', 'formatos admitidos'],
@@ -141,244 +142,26 @@ $$('[data-toggle]').forEach((h) =>
   h.addEventListener('click', () => document.getElementById(h.dataset.toggle!)?.classList.toggle('open'))
 );
 
-/* ═════════ Red neuronal (canvas) ═════════ */
-const canvas = $('#net') as HTMLCanvasElement;
-const ctx = canvas.getContext('2d')!;
-const tip = $('#nodeTip');
-let W = 0,
-  H = 0,
-  zoom = 1,
-  hovered: number | null = null,
-  netFilter = 'all',
-  t0 = performance.now();
-type NetNode = { name: string; files: number; status: string; bx: number; by: number; x: number; y: number; r: number; phase: number; drift: number };
-let nodes: NetNode[] = [];
-let edges: { a: number; b: number }[] = [];
-
-const COLOR: Record<string, { hex: string; rgb: number[] }> = {
-  ok: { hex: '#34d399', rgb: [52, 211, 153] },
-  index: { hex: '#fbbf24', rgb: [251, 191, 36] },
-  pending: { hex: '#626b7e', rgb: [98, 107, 126] }
-};
-const statusOf = (f: FolderInfo): string =>
-  f.status === 'ready' ? 'ok' : f.status === 'indexing' || f.status === 'scanning' ? 'index' : 'pending';
+/* ═════════ Lienzo infinito ═════════ */
+const home = new HomeCanvas({
+  stage: document.getElementById('homeStage') as HTMLElement,
+  world: document.getElementById('world') as HTMLElement,
+  canvas: document.getElementById('net') as HTMLCanvasElement,
+  minimap: document.getElementById('minimapCanvas') as HTMLCanvasElement,
+  hint: document.getElementById('homeHint'),
+  onAddFolder: () => {
+    go('carpetas');
+    setTimeout(() => document.getElementById('btnAddFolder')?.click(), 80);
+  },
+  onOpenFolders: () => go('carpetas')
+});
 
 function buildGraph(): void {
-  const src = folders.length > 0 ? folders : [{ name: 'Sin carpetas', fileCount: 0, status: 'pending' } as any];
-  const R = Math.min(W * 0.33, H * 0.34) || 160;
-  const n = Math.max(src.length, 1);
-  nodes = src.map((f, i) => {
-    const a = ((-90 + i * (360 / n)) * Math.PI) / 180;
-    const rr = R * (0.84 + (i % 2) * 0.28);
-    return {
-      name: f.name,
-      files: f.fileCount,
-      status: statusOf(f),
-      bx: W / 2 + Math.cos(a) * rr * 1.22,
-      by: H / 2 + Math.sin(a) * rr * 0.92,
-      x: 0,
-      y: 0,
-      r: 15 + Math.min(11, f.fileCount / 380),
-      phase: i * 1.7,
-      drift: 6 + (i % 3) * 3
-    };
-  });
-  edges = [];
-  nodes.forEach((_, i) => {
-    edges.push({ a: -1, b: i });
-    edges.push({ a: i, b: (i + 1) % nodes.length });
-  });
-  if (nodes.length > 3) edges.push({ a: 0, b: 3 });
-  if (nodes.length > 5) edges.push({ a: 2, b: 4 });
+  home.setFolders(folders);
 }
-
 function scheduleCanvasResize(): void {
-  const rect = canvas.parentElement!.getBoundingClientRect();
-  if (rect.width < 10) {
-    setTimeout(scheduleCanvasResize, 120);
-    return;
-  }
-  W = rect.width;
-  H = rect.height;
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  canvas.width = Math.floor(W * dpr);
-  canvas.height = Math.floor(H * dpr);
-  canvas.style.width = `${W}px`;
-  canvas.style.height = `${H}px`;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  buildGraph();
-  t0 = performance.now();
+  home.resize();
 }
-
-function draw(now: number): void {
-  requestAnimationFrame(draw);
-  if (W < 10 || H < 10 || document.hidden) return;
-  const t = (now - t0) / 1000;
-  ctx.clearRect(0, 0, W, H);
-  const cx = W / 2,
-    cy = H / 2;
-
-  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * 0.6);
-  grad.addColorStop(0, 'rgba(59,130,246,.08)');
-  grad.addColorStop(0.5, 'rgba(34,211,238,.022)');
-  grad.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, W, H);
-
-  nodes.forEach((n) => {
-    n.x = n.bx + Math.sin(t * 0.42 + n.phase) * n.drift;
-    n.y = n.by + Math.cos(t * 0.35 + n.phase * 1.3) * n.drift * 0.8;
-  });
-
-  edges.forEach((e) => {
-    const A = e.a === -1 ? { x: cx, y: cy } : nodes[e.a];
-    const B = nodes[e.b];
-    if (!A || !B) return;
-    const hot = hovered !== null && (e.a === hovered || e.b === hovered);
-    const dim = netFilter !== 'all' && nodes[e.b].status !== netFilter && (e.a === -1 || nodes[e.a].status !== netFilter);
-    ctx.beginPath();
-    ctx.moveTo(A.x, A.y);
-    ctx.lineTo(B.x, B.y);
-    ctx.strokeStyle = hot ? 'rgba(96,165,250,.45)' : dim ? 'rgba(59,130,246,.035)' : 'rgba(59,130,246,.11)';
-    ctx.lineWidth = hot ? 1.5 : 1;
-    ctx.stroke();
-    // partícula viajando
-    if (!dim) {
-      const p = (t * 0.28 + e.b * 0.17) % 1;
-      const x = A.x + (B.x - A.x) * p;
-      const y = A.y + (B.y - A.y) * p;
-      ctx.beginPath();
-      ctx.arc(x, y, hot ? 2.2 : 1.6, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(147,197,253,${(hot ? 0.95 : 0.55) * Math.sin(p * Math.PI)})`;
-      ctx.fill();
-    }
-  });
-
-  // núcleo
-  const pulse = 0.5 + Math.sin(t * 1.6) * 0.5;
-  const coreR = (30 + pulse * 2) * zoom;
-  for (let k = 0; k < 3; k++) {
-    ctx.beginPath();
-    ctx.arc(cx, cy, coreR + 16 + k * 20 + pulse * 6, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(59,130,246,${0.13 - k * 0.035})`;
-    ctx.stroke();
-  }
-  const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * 2.6);
-  cg.addColorStop(0, 'rgba(96,165,250,.42)');
-  cg.addColorStop(1, 'rgba(59,130,246,0)');
-  ctx.beginPath();
-  ctx.arc(cx, cy, coreR * 2.6, 0, Math.PI * 2);
-  ctx.fillStyle = cg;
-  ctx.fill();
-  const coreFill = ctx.createRadialGradient(cx - 8, cy - 8, 2, cx, cy, coreR);
-  coreFill.addColorStop(0, '#bfdbfe');
-  coreFill.addColorStop(0.55, '#3b82f6');
-  coreFill.addColorStop(1, '#5b21b6');
-  ctx.beginPath();
-  ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
-  ctx.fillStyle = coreFill;
-  ctx.shadowBlur = 32;
-  ctx.shadowColor = 'rgba(59,130,246,.75)';
-  ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.font = '600 10px Inter,sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,.92)';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('CEREBRO', cx, cy);
-
-  // nodos
-  nodes.forEach((n, i) => {
-    const isHover = hovered === i;
-    const col = COLOR[n.status] ?? COLOR.pending;
-    const r = (n.r + (isHover ? 3 : 0)) * zoom;
-    const dim = netFilter !== 'all' && n.status !== netFilter;
-    ctx.globalAlpha = dim ? 0.2 : 1;
-    const hg = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, r * 3.2);
-    hg.addColorStop(0, `rgba(${col.rgb.join(',')},${isHover ? 0.34 : 0.2})`);
-    hg.addColorStop(1, `rgba(${col.rgb.join(',')},0)`);
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, r * 3.2, 0, Math.PI * 2);
-    ctx.fillStyle = hg;
-    ctx.fill();
-    const bg = ctx.createRadialGradient(n.x - r * 0.35, n.y - r * 0.35, 1, n.x, n.y, r);
-    bg.addColorStop(0, '#2b3145');
-    bg.addColorStop(1, '#12161f');
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = bg;
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(${col.rgb.join(',')},${isHover ? 0.95 : 0.62})`;
-    ctx.lineWidth = isHover ? 2.2 : 1.5;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, r * 0.34, 0, Math.PI * 2);
-    ctx.fillStyle = col.hex;
-    ctx.shadowBlur = 12;
-    ctx.shadowColor = col.hex;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    if (n.status === 'index') {
-      const pr = r + 6 + ((t * 22) % 26);
-      ctx.beginPath();
-      ctx.arc(n.x, n.y, pr, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(251,191,36,${Math.max(0, 1 - ((t * 22) % 26) / 26) * 0.5})`;
-      ctx.stroke();
-    }
-    ctx.font = `${isHover ? 600 : 500} 11.5px Inter,sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillStyle = isHover ? '#fff' : 'rgba(200,207,222,.72)';
-    ctx.fillText(n.name, n.x, n.y + r + 9);
-    ctx.globalAlpha = 1;
-  });
-}
-requestAnimationFrame(draw);
-
-canvas.addEventListener('mousemove', (e) => {
-  const rect = canvas.getBoundingClientRect();
-  const mx = e.clientX - rect.left,
-    my = e.clientY - rect.top;
-  let found: number | null = null;
-  nodes.forEach((n, i) => {
-    if (netFilter !== 'all' && n.status !== netFilter) return;
-    if (Math.hypot(mx - n.x, my - n.y) <= n.r * zoom + 10) found = i;
-  });
-  hovered = found;
-  canvas.style.cursor = found !== null ? 'pointer' : 'default';
-  if (found !== null) {
-    const n = nodes[found];
-    const f = folders[found];
-    const label = { ok: 'Vectorizada', index: 'Indexando', pending: 'Pendiente' }[n.status];
-    tip.innerHTML = `<b>${esc(n.name)}</b>
-      <div class="row"><span>Archivos</span><span>${nf(n.files)}</span></div>
-      ${f ? `<div class="row"><span>Ruta</span><span style="font-family:var(--mono);font-size:10px">${esc(f.path)}</span></div>` : ''}
-      <div class="row"><span>Estado</span><span style="color:${COLOR[n.status]?.hex ?? '#888'}">${label}</span></div>`;
-    tip.style.left = `${n.x + n.r * zoom + 16}px`;
-    tip.style.top = `${n.y - 34}px`;
-    tip.classList.add('show');
-  } else tip.classList.remove('show');
-});
-canvas.addEventListener('mouseleave', () => {
-  hovered = null;
-  tip.classList.remove('show');
-});
-$('#zoomIn').addEventListener('click', () => (zoom = Math.min(1.8, zoom + 0.15)));
-$('#zoomOut').addEventListener('click', () => (zoom = Math.max(0.55, zoom - 0.15)));
-$('#resetNet').addEventListener('click', () => {
-  zoom = 1;
-  t0 = performance.now();
-});
-$$('.home-filters .chip').forEach((ch) =>
-  ch.addEventListener('click', () => {
-    $$('.home-filters .chip').forEach((x) => x.classList.remove('active'));
-    ch.classList.add('active');
-    netFilter = (ch as HTMLElement).dataset.filter!;
-  })
-);
-window.addEventListener('resize', () => setTimeout(scheduleCanvasResize, 120));
 
 /* ═════════ Carpetas ═════════ */
 const STATUS_LABEL: Record<string, [string, string]> = {
@@ -435,14 +218,104 @@ function renderFolders(): void {
   );
 }
 
+/* ═════════ Explorador de carpetas (modo web) ═════════
+   El navegador no puede leer rutas absolutas del equipo, así que el listado lo
+   hace el servidor (canal fs:list, solo directorios). Electron sigue usando el
+   diálogo nativo del sistema (folders:pick). */
+type FsListing = {
+  path: string;
+  parent: string | null;
+  entries: { name: string; path: string }[];
+  roots: { name: string; path: string }[];
+};
+let fpResolve: ((p: string | null) => void) | null = null;
+let fpPath = '';
+let fpParent: string | null = null;
+
+const FOLDER_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.4.6L12 7h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+const CHEV_ICON =
+  '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>';
+
+async function fpLoad(path?: string): Promise<void> {
+  const list = $('#fpList');
+  const input = $<HTMLInputElement>('#fpPathInput');
+  if (path !== undefined) input.value = path;
+  list.innerHTML = '<p class="fp-empty">Cargando…</p>';
+  try {
+    const out = await invoke<FsListing>('fs:list', input.value.trim());
+    fpPath = out.path;
+    fpParent = out.parent;
+    input.value = out.path;
+    $('#fpCurrent').textContent = out.path;
+    $<HTMLButtonElement>('#fpUp').disabled = !out.parent;
+    const roots = $('#fpRoots');
+    roots.innerHTML = out.roots
+      .map((r) => `<button class="chip" data-root="${esc(r.path)}">${esc(r.name)}</button>`)
+      .join('');
+    roots.querySelectorAll('[data-root]').forEach((b) =>
+      b.addEventListener('click', () => void fpLoad((b as HTMLElement).dataset.root!))
+    );
+    if (out.entries.length === 0) {
+      list.innerHTML =
+        '<p class="fp-empty">No hay subcarpetas visibles. Puedes seleccionar esta carpeta o escribir una ruta arriba.</p>';
+    } else {
+      list.innerHTML = out.entries
+        .map(
+          (e) =>
+            `<button class="fp-entry" data-dir="${esc(e.path)}">${FOLDER_ICON}<span>${esc(e.name)}</span>${CHEV_ICON}</button>`
+        )
+        .join('');
+      list.querySelectorAll('[data-dir]').forEach((b) =>
+        b.addEventListener('click', () => void fpLoad((b as HTMLElement).dataset.dir!))
+      );
+    }
+  } catch (e: any) {
+    list.innerHTML = `<p class="fp-empty">${esc(e.message)}</p>`;
+  }
+}
+
+function fpClose(result: string | null): void {
+  $('#folderPicker').hidden = true;
+  const r = fpResolve;
+  fpResolve = null;
+  r?.(result);
+}
+
+function pickFolderWeb(): Promise<string | null> {
+  $('#folderPicker').hidden = false;
+  fpPath = '';
+  fpParent = null;
+  void fpLoad('');
+  return new Promise((resolve) => {
+    fpResolve = resolve;
+  });
+}
+
+$('#fpClose').addEventListener('click', () => fpClose(null));
+$('#fpCancel').addEventListener('click', () => fpClose(null));
+$('#fpSelect').addEventListener('click', () => fpClose(fpPath || null));
+$('#fpUp').addEventListener('click', () => {
+  if (fpParent) void fpLoad(fpParent);
+});
+$('#fpGo').addEventListener('click', () => void fpLoad($<HTMLInputElement>('#fpPathInput').value.trim()));
+$('#fpPathInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') void fpLoad(($<HTMLInputElement>('#fpPathInput').value || '').trim());
+});
+$('#folderPicker').addEventListener('click', (e) => {
+  if (e.target === $('#folderPicker')) fpClose(null);
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('#folderPicker').hidden) fpClose(null);
+});
+
 $('#btnAddFolder').addEventListener('click', async () => {
   try {
     let path: string | null = null;
-    /* Siempre usamos el diálogo nativo de Electron si está disponible;
-       si no (modo web), caemos al prompt como respaldo. */
+    /* Electron: diálogo nativo del sistema. Web: explorador de carpetas del
+       servidor (el navegador no puede leer rutas absolutas del equipo). */
     if (IS_WEB) {
-      const raw = prompt('Ruta absoluta de la carpeta que quieres indexar:', '/home/');
-      path = (raw ?? '').trim() || null;
+      path = await pickFolderWeb();
     } else {
       path = await invoke<string | null>('folders:pick');
     }
@@ -1214,6 +1087,7 @@ async function boot(): Promise<void> {
 
   renderSettings();
   renderHardware(snap.hardware);
+  $('#topSub').textContent = 'lienzo infinito';
   folders = await invoke<FolderInfo[]>('folders:list');
   renderFolders();
   buildGraph();

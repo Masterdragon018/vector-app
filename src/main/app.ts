@@ -90,7 +90,12 @@ export class CerebroApp {
         : process.platform === 'win32' && hasGpu
           ? 'dml'
           : 'cpu';
-    app.engine = new EmbeddingEngine(app.modelsDir, preferDevice);
+    app.logger.info(
+      `GPU detectada: ${
+        hasGpu ? app.hardware.gpus.map((g) => `${g.name}${g.vramMB ? ` (${g.vramMB} MB)` : ''}`).join(', ') : 'ninguna'
+      } · dispositivo de embeddings: ${preferDevice.toUpperCase()}`
+    );
+    app.engine = new EmbeddingEngine(app.modelsDir, preferDevice, (msg) => app.logger.warn(msg));
     app.indexer = new Indexer({
       db: app.db,
       engine: app.engine,

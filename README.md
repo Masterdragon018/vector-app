@@ -4,7 +4,7 @@
 
 Cerebro Local es una aplicación de escritorio (Windows y Linux) que convierte las carpetas que tú elijas en un cerebro de conocimiento vectorial. Tus agentes de IA (Claude Desktop, Claude Code, Cursor, Windsurf, cualquier cliente MCP o vía API REST) pueden consultar ese conocimiento con rutas exactas y citas verificables — sin que nada salga de tu equipo.
 
-## ✅ Estado actual (versión 0.3.0)
+## ✅ Estado actual (versión 0.7.0)
 
 - **Modo web + Electron**: `npm start` arranca la UI en el navegador (http://127.0.0.1:PUERTO) **o** abre la app Electron clásica. El backend es el mismo: Node + SQLite + sqlite-vec + ONNX.
 - **Aceleración por GPU**: si tienes una GPU NVIDIA con el runtime CUDA disponible, los embeddings se ejecutan en la gráfica (~14× más rápido que en CPU en una GTX 1660 Ti). Configúralo con `npm run gpu:setup` (descarga las libs de NVIDIA una sola vez). Sin GPU, todo funciona igual en CPU.
@@ -39,6 +39,25 @@ npm run start            # arranca el servidor HTTP y abre el navegador
 - Puente `/bridge`: POST JSON → mismo comportamiento que el IPC de Electron
 - EventSource `/events`: SSE con todos los eventos push (log, progreso, folders:changed, stats:changed, server:status, model:download, clients:changed)
 - `/events` y `/bridge` **no requieren token** (acceso localhost-only)
+
+## 🧩 Servicio con pm2 (siempre activo, en el navegador)
+
+Para dejarlo como servicio que arranca solo y se consulta desde el navegador:
+
+```bash
+npm install -g pm2
+npm run gpu:setup        # Linux + NVIDIA: habilita CUDA (una vez)
+npm run build
+pm2 start ecosystem.config.cjs
+pm2 save
+pm2 startup              # genera el comando de arranque al encender; ejecútalo
+```
+
+- El ecosistema ya define `CEREBRO_NO_OPEN=1`: **no** abre navegador.
+- `CEREBRO_HOME` por defecto: `~/.config/cerebro-local/data` (reutiliza la DB y los modelos ya descargados).
+- Logs: `pm2 logs cerebro-local` — al arrancar verás `Motor: GPU (CUDA)` o `Motor: CPU`.
+- Tras cambiar código o modelo: `npm run build && pm2 restart cerebro-local`.
+- Para acceder desde otra máquina de la red, activa «Permitir LAN» en Ajustes (o `server.allowLan: true` en `config.json`).
 
 ## 💿 Modo Electron (clásico)
 
